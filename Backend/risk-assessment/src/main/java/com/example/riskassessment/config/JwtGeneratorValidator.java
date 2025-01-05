@@ -18,13 +18,16 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import java.security.Key;
 
 @Component
 public class JwtGeneratorValidator {
     @Autowired
     UserService userService;
 
-    private final String SECRET = "codeWithRaman";
+    // Use a securely generated key
+    private final Key SECRET_KEY = Keys.secretKeyFor(SignatureAlgorithm.HS256);
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -33,6 +36,7 @@ public class JwtGeneratorValidator {
     public Claims extractUserRole(String token) {
         return extractAllClaims(token);
     }
+
     public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }
@@ -41,8 +45,13 @@ public class JwtGeneratorValidator {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
     }
+
     public Claims extractAllClaims(String token) {
-        return Jwts.parser().setSigningKey(SECRET).parseClaimsJws(token).getBody();
+        return Jwts.parserBuilder()
+                .setSigningKey(SECRET_KEY)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
     }
 
     private Boolean isTokenExpired(String token) {
@@ -55,11 +64,18 @@ public class JwtGeneratorValidator {
     }
 
     private String createToken(Map<String, Object> claims, Authentication authentication) {
-        String role =authentication.getAuthorities().stream()
-                .map(r -> r.getAuthority()).collect(Collectors.toSet()).iterator().next();
-        return Jwts.builder().claim("role",role).setSubject(authentication.getName()).setIssuedAt(new Date(System.currentTimeMillis()))
+        Set<String> roles = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toSet());
+        claims.put("roles", roles);
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(authentication.getName())
+                .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(5)))
-                .signWith(SignatureAlgorithm.HS256, SECRET).compact();
+                .signWith(SECRET_KEY)  // Use the secure key
+                .compact();
     }
 
     public Boolean validateToken(String token, UserDetails userDetails) {
@@ -68,15 +84,15 @@ public class JwtGeneratorValidator {
     }
 
     public UsernamePasswordAuthenticationToken getAuthenticationToken(final String token, final Authentication existingAuth, final UserDetails userDetails) {
-
         Claims claims = extractAllClaims(token);
 
-        final Collection<? extends GrantedAuthority> authorities =
-                Arrays.stream(claims.get("role").toString().split(","))
-                        .map(SimpleGrantedAuthority::new)
-                        .collect(Collectors.toList());
+        @SuppressWarnings("unchecked")
+        Set<String> roles = (Set<String>) claims.get("roles");
+
+        final Collection<? extends GrantedAuthority> authorities = roles.stream()
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
 
         return new UsernamePasswordAuthenticationToken(userDetails, "", authorities);
     }
-
 }

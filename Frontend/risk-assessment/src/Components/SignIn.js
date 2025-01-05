@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -12,6 +13,7 @@ import axios from 'axios';
 import background from '../Assets/finance-background.jpg';
 
 function SignIn() {
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,11 +24,19 @@ function SignIn() {
     setError('');
     setSuccess('');
     try {
-      const response = await axios.post('http://localhost:9192/genToken', {
-        userName: username,
-        password: password,
-      });
-      setSuccess('Login successful! Token: ' + response.data);
+      // Send login request with credentials
+      const response = await axios.post(
+        'http://localhost:9192/login',
+        {
+          userName: username,
+          password: password,
+        },
+        {
+          withCredentials: true, 
+        }
+      );
+      setSuccess('Login successful!');
+      navigate('/adminHome');
     } catch (err) {
       setError('Login failed. Please check your credentials.');
     }

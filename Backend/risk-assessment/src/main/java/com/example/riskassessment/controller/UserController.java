@@ -2,8 +2,11 @@ package com.example.riskassessment.controller;
 
 import com.example.riskassessment.config.JwtGeneratorValidator;
 import com.example.riskassessment.dto.UserDTO;
+import com.example.riskassessment.dto.requests.SignInRequest;
 import com.example.riskassessment.model.User;
 import com.example.riskassessment.service.UserService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,15 +16,13 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestController
+@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 public class UserController {
 
     @Autowired
@@ -46,12 +47,33 @@ public class UserController {
         }
     }
 
-    @GetMapping("/genToken")
-    public String generateJwtToken(@RequestBody UserDTO userDto) throws Exception {
-        Authentication authentication = authManager.authenticate(
-                new UsernamePasswordAuthenticationToken(userDto.getUserName(), userDto.getPassword()));
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        return jwtGenVal.generateToken(authentication);
+    @PostMapping("/login")
+        public String login(@RequestBody SignInRequest userDto, HttpServletResponse response){
+
+            Authentication authentication = authManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(userDto.getUserName(), userDto.getPassword())
+            );
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwtToken = jwtGenVal.generateToken(authentication);
+            Cookie cookie = new Cookie("token", jwtToken);
+            System.out.println(cookie);
+            cookie.setHttpOnly(true);
+            cookie.setSecure(true);
+            cookie.setPath("/");
+            cookie.setMaxAge(7600);
+            response.addCookie(cookie);
+            return jwtToken;
+        }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Object> logout(HttpServletResponse response) {
+        Cookie cookie = new Cookie("token", null);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
+        return ResponseEntity.ok("Logged out successfully.");
     }
 
     @GetMapping("/welcomeAdmin")
